@@ -1,0 +1,71 @@
+def draw_boxes(img, bbox, names, object_id, identities=None, offset=(0, 0), parking_lots=[]):
+    height, width, _ = img.shape
+
+    # Draw parking lot boxes and calculate areas
+    parking_lot_areas = {}
+    for lot in parking_lots:
+        lot_name, x1, y1, x2, y2 = lot
+        # Determine color based on the vacant status
+        doc = db.collection('ParkingLot').document(lot_name).get()
+        if doc.exists:
+            vacant_status = doc.to_dict().get('vacant', True)  # Default to True if not found
+            color = (0, 255, 0) if vacant_status else (0, 0, 255)  # Green if vacant, red if not
+        else:
+            color = (0, 255, 0)  # Default to green if document does not exist
+
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)  # Draw in the determined color
+        cv2.putText(img, lot_name, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        parking_lot_area = (x2 - x1) * (y2 - y1)  # Area of parking lot
+        parking_lot_areas[lot_name] = parking_lot_area
+
+    # Remove tracked point from buffer if object is lost
+    for key in list(data_deque):
+        if key not in identities:
+            data_deque.pop(key)
+
+    # Dictionary to keep track of total intersection area for each parking lot
+    intersection_areas = {lot[0]: 0 for lot in parking_lots}
+
+    for i, box in enumerate(bbox):
+        x1, y1, x2, y2 = [int(i) for i in box]
+        x1 += offset[0]
+        x2 += offset[0]
+        y1 += offset[1]
+        y2 += offset[1]
+
+        center = (int((x2 + x1) / 2), int((y2 + y1) / 2))
+
+        id = int(identities[i]) if identities is not None else 0
+
+        if id not in data_deque:
+            data_deque[id] = deque(maxlen=64)
+        color = compute_color_for_labels(object_id[i])
+        obj_name = names[object_id[i]]
+        label = '{}{:d}'.format("", id) + ":" + '%s' % (obj_name)
+
+        data_deque[id].appendleft(center)
+        UI_box(box, img, label=label, color=color, line_thickness=2)
+
+        for lot in parking_lots:
+            lot_name, lx1, ly1, lx2, ly2 = lot
+            # Check for intersection
+            if x1 < lx2 and x2 > lx1 and y1 < ly2 and y2 > ly1:  # Bounding box overlaps with parking lot
+                # Calculate intersection area
+                intersection_x1 = max(x1, lx1)
+                intersection_y1 = max(y1, ly1)
+                intersection_x2 = min(x2, lx2)
+                intersection_y2 = min(y2, ly2)
+                intersection_area = (intersection_x2 - intersection_x1) * (intersection_y2 - intersection_y1)
+
+                if intersection_area > 0:
+                    intersection_areas[lot_name] += intersection_area  # Add to total intersection area for this parking lot
+
+    # Update Firestore database based on intersection areas
+    for lot_name, intersection_area in intersection_areas.items():
+        parking_lot_area = parking_lot_areas[lot_name]
+        if intersection_area / parking_lot_area >= 0.5:  # If more than 50% of the parking lot is occupied
+            db.collection('ParkingLot').document(lot_name).set({'vacant': False}, merge=True)
+        else:
+            db.collection('ParkingLot').document(lot_name).set({'vacant': True}, merge=True)
+
+    return img

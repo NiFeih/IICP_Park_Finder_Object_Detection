@@ -1,0 +1,10 @@
+DEEPSORT:
+  REID_CKPT: "deep_sort_pytorch/deep_sort/deep/checkpoint/ckpt.t7"
+  MAX_DIST: 0.2
+  MIN_CONFIDENCE: 0.3 # sets the minimum confidence threshold for detections.
+  NMS_MAX_OVERLAP: 0.5 #maximum allowed overlap (using Non-Maximum Suppression) between bounding boxes in a single frame.
+  MAX_IOU_DISTANCE: 0.7 # Higher values for objects are close together but need to be treated separately
+  MAX_AGE: 70 # how long a track can be kept without seeing the object in new frames
+  N_INIT: 3 # number of consecutive frames that an object must be detected to initialize a new track
+  NN_BUDGET: 100 #manage memory usage
+  

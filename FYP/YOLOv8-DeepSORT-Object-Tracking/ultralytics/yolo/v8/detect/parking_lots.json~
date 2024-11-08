@@ -1,0 +1,40 @@
+import cv2
+import json
+
+# Initialize variables
+drawing = False
+ix, iy = -1, -1
+boxes = []
+
+def draw_rectangle(event, x, y, flags, param):
+    global ix, iy, drawing, boxes
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = True
+        ix, iy = x, y
+    elif event == cv2.EVENT_MOUSEMOVE:
+        if drawing:
+            img_copy = img.copy()
+            cv2.rectangle(img_copy, (ix, iy), (x, y), (255, 0, 0), 2)
+            cv2.imshow('image', img_copy)
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        boxes.append((ix, iy, x, y))  # Save coordinates
+        cv2.rectangle(img, (ix, iy), (x, y), (255, 0, 0), 2)
+        cv2.imshow('image', img)
+
+# Load an image (or video frame)
+img = cv2.imread('your_image.jpg')  # Replace with video frame if needed
+cv2.namedWindow('image')
+cv2.setMouseCallback('image', draw_rectangle)
+
+while True:
+    cv2.imshow('image', img)
+    if cv2.waitKey(1) & 0xFF == 27:  # Esc key to exit
+        break
+
+# Save boxes to JSON file
+parking_lots = [{"name": f"A{i+1}", "coordinates": box, "vacant": True} for i, box in enumerate(boxes)]
+with open('parking_lots.json', 'w') as f:
+    json.dump(parking_lots, f)
+
+cv2.destroyAllWindows()
